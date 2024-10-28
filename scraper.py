@@ -37,7 +37,7 @@ def cwf(text):
         "yourselves"
     }
     count = 0
-    with shelve.open('f.shelve') as fq:
+    with shelve.open('f.shelve', writeback = True) as fq:
         for word in tokenize(text):
             if word not in stop_words:
                 count += 1
@@ -57,7 +57,7 @@ def extract_next_links(url, resp):
 	valid_codes = [200, 404,301,302,307,308] #was only 200 and 404 but loosend up restriction to allow for more urls 
 
 	#this creates and adds sites to its specific domain name to answer questions about count and total unique sites (1 and 4)
-	with shelve.open('domains.shelve') as ds:
+	with shelve.open('domains.shelve', writeback=True) as ds:
 		key = urlparse(url).netloc
 		if key in ds: 
 			ds[key].append(url)
@@ -68,7 +68,9 @@ def extract_next_links(url, resp):
 
 	if resp.status in valid_codes: #others are usually forbideen
 		soup = BeautifulSoup(resp.raw_response.content, 'lxml') #changed from html.parser for speed
+
 		#checks the meta tag to check if scraping is allowed
+		is_html_file = bool(soup.find("html") and soup.find("head") and soup.find("body")) #check we are dealing with a true html file
 		alf = True #alf stands for alllowed link following (custom name)
 		ai = True #aif stand for allowed indexing 
 		robot_meta_tag = soup.find('meta', attrs={'name': 'robots'})
@@ -77,19 +79,19 @@ def extract_next_links(url, resp):
 			ai = not ('noindex' in robot_meta_tag['content']) # False if non indexable
 
 
-		if ai and resp.status == 200: #allowed indexing of the page 	
+		if ai and resp.status == 200 and is_html_file: #allowed indexing of the page 	
 			page_text = ' '.join([element.get_text(strip=True) for element in soup.find_all(['h1','h2','h3','h4','h5','h6','p'])])
 
-			if len(page_text) > 150: #low information page so not worth 
+			if len(page_text) > 200: #low information page so not worth 
 				total_count = cwf(page_text) #retuns total word count of that file
-				with shielve.open('longest_page.shelve') as lp:
+				with shelve.open('longest_page.shelve', writeback = True) as lp:
 					max_count = max(lp.values(), default = 0)
 					if total_count > max_count:
 						lp.clear()
 						lp[url] = total_count
 					
 
-		if alf: #allowed link following 
+		if alf and is_html_file: #allowed link following 
 			#extract the links 
 			for link in soup.find_all('a'):
 				href = link.get('href')
@@ -105,7 +107,17 @@ def extract_next_links(url, resp):
 
 
 def is_valid(url):
+
+	def validate_query_params(query_param):
+		keys = ['sort', 'order', 'ref', 'share', 'scroll', 'position']
+		for key in keys:
+			if key in query_param and query_param[key][0].strip(): #make sure not empty
+				return True
+		return False
+
+
     valid_domains = {'ics.uci.edu', 'cs.uci.edu', 'informatics.uci.edu', 'stat.uci.edu'}
+	
     # do a special case for the today uci.edu one
     try:
         parsed = urlparse(url)
@@ -116,7 +128,7 @@ def is_valid(url):
 
         if parsed.scheme not in set(["http", "https"]):
             return False
-
+		
         return (
             not re.match(
                 r".*\.(css|js|bmp|gif|jpeg|ico"
@@ -128,12 +140,10 @@ def is_valid(url):
                 + r"|thmx|mso|arff|rtf|jar|csv"
                 + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower()
             )
-            and not re.match(r".*\b(auth|signup|admin|checkout|calendar)\b.*", parsed.path.lower())# to remove calendar tags and other private tags 
-            and not re.match(r"^.*/(.+?/)*?\1.*$", parsed.path.lower())  # for repeated directorier
-			and not re.search(r"\b(sort|order|orderby|ref|share|scroll|position|filter)$", parsed.query.lower())
+            and not re.match(r".*\b(auth|signup|admin|checkout|login|calendar)\b.*", parsed.path.lower())# to remove calendar tags and other private tags 
+  			and not validate_query_params(parse_qs(parsed.query.lower()))
+			and not re.search(r"filter", parsed.query.lower())
 		)
     except TypeError:
         print("TypeError for ", parsed)
         raise
-
-
