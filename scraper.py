@@ -59,6 +59,12 @@ def scraper(url, resp):
     links = extract_next_links(url, resp)
     return [link for link in links if is_valid(link)]
 
+
+def check_calendar(raw_text, parsed):
+	#returns true if a calendar
+	return 'no events' in raw_text and (bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query) or re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.path)))
+
+
 def extract_next_links(url, resp):
 	new_urls = []
 	valid_codes = [200, 404,301,302,307,308] #was only 200 and 404 but loosend up restriction to allow for more urls 
@@ -85,10 +91,15 @@ def extract_next_links(url, resp):
 			alf = not ('nofollow' in robot_meta_tag['content']) #False if non follow
 			ai = not ('noindex' in robot_meta_tag['content']) # False if non indexable
 
-		if ai and resp.status == 200 and is_html_file: #allowed indexing of the page 	
+
+		calendar_check = check_calendar(soup.get_text(separator=' ', strip = True).lower(), urlparse(url))
+
+
+
+		if ai and resp.status == 200 and is_html_file: #allowed indexing of the page
 			page_text = ' '.join([element.get_text(strip=True) for element in soup.find_all(['h1','h2','h3','h4','h5','h6','p'])])
 
-			if len(page_text) > 200: #low information page so not worth 
+			if len(page_text) > 200 and not calendar_check: #low information page so not worth 
 				total_count = cwf(page_text) #retuns total word count of that file
 				with shelve.open('longest_page.shelve', writeback = True) as lp:
 					max_count = max(lp.values(), default = 0)
@@ -100,7 +111,7 @@ def extract_next_links(url, resp):
 		 
 					
 
-		if alf and is_html_file: #allowed link following 
+		if alf and is_html_file and not calendar_check: #allowed link following 
 			#extract the links 
 			for link in soup.find_all('a'):
 				href = link.get('href')
@@ -114,8 +125,8 @@ def extract_next_links(url, resp):
 
 def is_valid(url):
     def validate_query_params(query_param):
-        keys = ['sort', 'order', 'ref', 'share', 'scroll', 'position']
-        for key in keys:
+        keys = ['sort', 'ref', 'share']
+        for key in keys:i
             if key in query_param and query_param[key][0].strip():  # make sure the params dont lead to empty values hence the strip
                 return True
         return False
@@ -152,8 +163,8 @@ def is_valid(url):
             and not re.match(r".*\b(auth|signup|admin|checkout|login|calendar)\b.*", parsed.path.lower()) #sensitive information as well as calendar
             and not validate_query_params(parse_qs(parsed.query.lower()))
             and not re.search(r"\bfilter\b", parsed.query.lower()) #just for filters
-            and not (bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query)) or 'events' in parsed.path)  # another calendar check
-        )
+            and not (bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query) or re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.path) ) and 'events' in parsed.path)) # another calendar check
+        
     except TypeError:
         print("TypeError for", parsed)
         raise
