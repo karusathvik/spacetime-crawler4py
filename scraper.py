@@ -62,7 +62,7 @@ def check_calendar(raw_text, parsed):
 
 def extract_next_links(url, resp):
     new_urls = []
-    valid_codes = [200, 404, 301, 302, 307, 308]  # was only 200 and 404 but loosened up restriction to allow for more urls 
+    valid_codes = [200]  # was only 200 and 404 but loosened up restriction to allow for more urls 
 
     # this creates and adds sites to its specific domain name to answer questions about count and total unique sites (1 and 4)
     with shelve.open('domains.shelve', writeback=True) as ds:
