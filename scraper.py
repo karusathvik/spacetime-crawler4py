@@ -116,7 +116,7 @@ def is_valid(url):
     def validate_query_params(query_param):
         keys = ['sort', 'order', 'ref', 'share', 'scroll', 'position']
         for key in keys:
-            if key in query_param and query_param[key][0].strip():  # Ensure it's not empty
+            if key in query_param and query_param[key][0].strip():  # make sure the params dont lead to empty values hence the strip
                 return True
         return False
 
@@ -149,13 +149,13 @@ def is_valid(url):
                 r"|thmx|mso|arff|rtf|jar|csv"
                 r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower()
             )
-            and not re.match(r".*\b(auth|signup|admin|checkout|login|calendar)\b.*", parsed.path.lower())
+            and not re.match(r".*\b(auth|signup|admin|checkout|login|calendar)\b.*", parsed.path.lower()) #sensitive information as well as calendar
             and not validate_query_params(parse_qs(parsed.query.lower()))
-            and not re.search(r"\bfilter\b", parsed.query.lower())
+            and not re.search(r"\bfilter\b", parsed.query.lower()) #just for filters
             and not (bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query)) or 'events' in parsed.path)  # another calendar check
         )
     except TypeError:
-		print("TypeError for", parsed)
+        print("TypeError for", parsed)
         raise
 
 
