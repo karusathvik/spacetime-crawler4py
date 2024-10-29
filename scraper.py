@@ -60,14 +60,14 @@ def check_calendar(raw_text, parsed):
     raw_text = raw_text.lower()
     # returns true if a calendar
     return (
-        ('no events' in raw_text or 'no results' in raw_text) and (
+        ((
             bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query.lower()))
             or re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.path.lower())
             or 'calendar' in parsed.path.lower()
-            or bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.path.lower()))
-            or bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query.lower()))
-			or bool(re.search(r"eventdisplay", parsed.query.lower()))
-        )
+            or bool(re.search(r"\b\d{4}-\d{2}\b", parsed.path.lower()))
+            or bool(re.search(r"\b\d{4}-\d{2}\b", parsed.query.lower()))
+            or bool(re.search(r"eventdisplay", parsed.query.lower()))
+        ))
     )
 
 def extract_next_links(url, resp):
@@ -94,9 +94,8 @@ def extract_next_links(url, resp):
             alf = not ('nofollow' in robot_meta_tag['content'])  # False if non-follow
             ai = not ('noindex' in robot_meta_tag['content'])  # False if non-indexable
 
-        calendar_check = check_calendar(soup.get_text(separator=' ', strip=True), urlparse(url)) #check if we are dealing with an empty calendar
-		link_count = 0
-
+        calendar_check = check_calendar(soup.get_text(separator=' ', strip=True), urlparse(url))  # check if we are dealing with an empty calendar
+       
         if alf and is_html_file and not calendar_check:  # allowed link following 
             # extract the links 
             for link in soup.find_all('a'):
@@ -105,9 +104,9 @@ def extract_next_links(url, resp):
                 if href and (not rel or "nofollow" not in rel):
                     full_link = urlunparse(urlparse(urljoin(url, href))._replace(fragment=''))  # removes the fragment only    
                     new_urls.append(full_link)
-					link_count += 1
+                    
 
-        if ai and is_html_file and not calendar_check and link_count:  # allowed indexing of the page
+        if ai and is_html_file and not calendar_check:  # allowed indexing of the page
             page_text = ' '.join([element.get_text(strip=True) for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p'])])
 
             if len(page_text) > 700:  # low information page so not worth 
@@ -119,7 +118,6 @@ def extract_next_links(url, resp):
                         lp[url] = total_count
                         with open("long_file.txt", "w") as file:
                             file.write(page_text)
-
 
     return new_urls
 
@@ -157,18 +155,19 @@ def is_valid(url):
                 r"|png|tiff|mid|mp2|mp3|mp4"
                 r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
                 r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
-                r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso|war"
-                r"|epub|dll|cnf|tgz|sha1"
-                r"|thmx|mso|arff|rtf|jar|csv"
+                r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso|war|bst|mpg|tgz"
+                r"|epub|dll|cnf|tgz|sha1|bib"
+                r"|thmx|mso|arff|rtf|jar|csv|Z|ppsh|ppsx|img|sql|class"
                 r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower()
             )
             and not re.match(r".*\b(auth|signup|admin|checkout|login|calendar|pix)\b.*", parsed.path.lower())  # sensitive information as well as calendar
             and not validate_query_params(parse_qs(parsed.query.lower()))
             and not re.search(r"\bfilter\b", parsed.query.lower())  # just for filters
             and not (bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query) or re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.path)) and 'events' in parsed.path)  # another calendar check
-			and not bool(re.search(r"^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$", parsed.path.lower()))
+            and not bool(re.search(r"^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$", parsed.path.lower()))
         )
     
     except TypeError:
         print("TypeError for", parsed)
         raise
+
