@@ -1,4 +1,4 @@
-import re 
+import re
 import os
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse, urljoin
 from bs4 import BeautifulSoup
@@ -57,8 +57,18 @@ def scraper(url, resp):
     return [link for link in links if is_valid(link)]
 
 def check_calendar(raw_text, parsed):
+    raw_text = raw_text.lower()
     # returns true if a calendar
-    return ('no events' in raw_text or 'no results' in raw_text) and (bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query) or re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.path)) or 'calendar' in parsed.path.lower() or bool(re.search(r"\b\d{4}-\d{2}\b", parsed.path)) or bool(re.search(r"\b\d{4}-\d{2}\b", parsed.query))  )
+    return (
+        ('no events' in raw_text or 'no results' in raw_text) and (
+            bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query.lower()))
+            or re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.path.lower())
+            or 'calendar' in parsed.path.lower()
+            or bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.path.lower()))
+            or bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query.lower()))
+			or bool(re.search(r"eventdisplay", parsed.query.lower()))
+        )
+    )
 
 def extract_next_links(url, resp):
     new_urls = []
@@ -84,20 +94,8 @@ def extract_next_links(url, resp):
             alf = not ('nofollow' in robot_meta_tag['content'])  # False if non-follow
             ai = not ('noindex' in robot_meta_tag['content'])  # False if non-indexable
 
-        calendar_check = check_calendar(soup.get_text(separator=' ', strip=True).lower(), urlparse(url))
-
-        if ai and resp.status == 200 and is_html_file:  # allowed indexing of the page
-            page_text = ' '.join([element.get_text(strip=True) for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p'])])
-
-            if len(page_text) > 200 and not calendar_check:  # low information page so not worth 
-                total_count = cwf(page_text)  # returns total word count of that file
-                with shelve.open('longest_page.shelve', writeback=True) as lp:
-                    max_count = max(lp.values(), default=0)
-                    if total_count > max_count:
-                        lp.clear()
-                        lp[url] = total_count
-                        with open("long_file.txt", "w") as file:
-                            file.write(page_text)
+        calendar_check = check_calendar(soup.get_text(separator=' ', strip=True), urlparse(url)) #check if we are dealing with an empty calendar
+		link_count = 0
 
         if alf and is_html_file and not calendar_check:  # allowed link following 
             # extract the links 
@@ -107,14 +105,29 @@ def extract_next_links(url, resp):
                 if href and (not rel or "nofollow" not in rel):
                     full_link = urlunparse(urlparse(urljoin(url, href))._replace(fragment=''))  # removes the fragment only    
                     new_urls.append(full_link)
+					link_count += 1
+
+        if ai and is_html_file and not calendar_check and link_count:  # allowed indexing of the page
+            page_text = ' '.join([element.get_text(strip=True) for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p'])])
+
+            if len(page_text) > 700:  # low information page so not worth 
+                total_count = cwf(page_text)  # returns total word count of that file
+                with shelve.open('longest_page.shelve', writeback=True) as lp:
+                    max_count = max(lp.values(), default=0)
+                    if total_count > max_count:
+                        lp.clear()
+                        lp[url] = total_count
+                        with open("long_file.txt", "w") as file:
+                            file.write(page_text)
+
 
     return new_urls
 
 def is_valid(url):
     def validate_query_params(query_param):
-        keys = ['sort', 'ref', 'share']
-		if 'login' in query_param['action'][0].strip():
-			return True
+        keys = ['sort', 'ref', 'share', 'scroll', 'position']
+        if query_param.get('action') and 'login' in query_param['action'][0].strip():
+            return True
         for key in keys:
             if key in query_param and query_param[key][0].strip():  # make sure the params don’t lead to empty values hence the strip
                 return True
@@ -140,7 +153,7 @@ def is_valid(url):
         # Validate file types, paths, and query parameters
         return (
             not re.match(
-                r".*\.(css|js|bmp|gif|jpeg|ico"
+                r".*\.(css|js|bmp|gif|jpeg|ico|jpg|cpp|h"
                 r"|png|tiff|mid|mp2|mp3|mp4"
                 r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
                 r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
@@ -149,13 +162,13 @@ def is_valid(url):
                 r"|thmx|mso|arff|rtf|jar|csv"
                 r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower()
             )
-            and not re.match(r".*\b(auth|signup|admin|checkout|login|calendar)\b.*", parsed.path.lower())  # sensitive information as well as calendar
+            and not re.match(r".*\b(auth|signup|admin|checkout|login|calendar|pix)\b.*", parsed.path.lower())  # sensitive information as well as calendar
             and not validate_query_params(parse_qs(parsed.query.lower()))
             and not re.search(r"\bfilter\b", parsed.query.lower())  # just for filters
             and not (bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query) or re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.path)) and 'events' in parsed.path)  # another calendar check
+			and not bool(re.search(r"^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$", parsed.path.lower()))
         )
     
     except TypeError:
         print("TypeError for", parsed)
         raise
-
