@@ -44,8 +44,8 @@ def cwf(text):
     if density < 0.45:
         with shelve.open('f.shelve', writeback=True) as fq:
             for word in tokenize(text):
+				count += 1
                 if word not in stop_words:
-                    count += 1
                     if word in fq:
                         fq[word] += 1
                     else:
@@ -137,8 +137,8 @@ def is_valid(url):
         parsed = urlparse(url)
         domain = parsed.netloc
 
-        if domain == 'today.uci.edu' and parsed.path.startswith('/department/information_computer_sciences'):
-            return True
+        if domain == 'today.uci.edu' and not parsed.path.startswith('/department/information_computer_sciences'):
+            return False
 
         # Check if domain is valid
         if not any((valid_domain == domain) or (domain.endswith(f".{valid_domain}")) for valid_domain in valid_domains):
@@ -153,7 +153,7 @@ def is_valid(url):
             not re.match(
                 r".*\.(css|js|bmp|gif|jpeg|ico|jpg|cpp|h"
                 r"|png|tiff|mid|mp2|mp3|mp4"
-                r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
+                r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf|lif"
                 r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
                 r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso|war|bst|mpg|tgz"
                 r"|epub|dll|cnf|tgz|sha1|bib"
