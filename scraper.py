@@ -31,7 +31,7 @@ def density_calculation(text):
         else:
             stop_word_count += 1
     return stop_word_count / (stop_word_count + normal_count)
-            
+
 # cwf = compute word frequencies
 def cwf(text):
     global stop_words
@@ -41,7 +41,7 @@ def cwf(text):
 
     density = density_calculation(text)
     count = 0
-    if density < 0.45:
+    if density < 0.55:
         with shelve.open('f.shelve', writeback=True) as fq:
             for word in tokenize(text):
                 count += 1
@@ -70,12 +70,12 @@ def check_calendar(raw_text, parsed):
 
 def extract_next_links(url, resp):
     new_urls = []
-    valid_codes = [200]  # was only 200 and 404 but loosened up restriction to allow for more urls 
+    valid_codes = [200]  # was only 200 and 404 but loosened up restriction to allow for more urls
 
     # this creates and adds sites to its specific domain name to answer questions about count and total unique sites (1 and 4)
     with shelve.open('domains.shelve', writeback=True) as ds:
         key = urlparse(url).netloc
-        if key in ds: 
+        if key in ds:
             ds[key].append(url)
         else:
             ds[key] = [url]
@@ -86,28 +86,28 @@ def extract_next_links(url, resp):
         # checks the meta tag to check if scraping is allowed
         is_html_file = bool(soup.find("html") and soup.find("head") and soup.find("body"))  # check we are dealing with a true html file
         alf = True  # alf stands for allowed link following (custom name)
-        ai = True  # ai stands for allowed indexing 
+        ai = True  # ai stands for allowed indexing
         robot_meta_tag = soup.find('meta', attrs={'name': 'robots'})
         if robot_meta_tag and 'content' in robot_meta_tag:
             alf = not ('nofollow' in robot_meta_tag['content'])  # False if non-follow
             ai = not ('noindex' in robot_meta_tag['content'])  # False if non-indexable
 
         calendar_check = check_calendar(soup.get_text(separator=' ', strip=True), urlparse(url))  # check if we are dealing with an empty calendar
-       
-        if alf and is_html_file and not calendar_check:  # allowed link following 
-            # extract the links 
+
+        if alf and is_html_file and not calendar_check:  # allowed link following
+            # extract the links
             for link in soup.find_all('a'):
                 href = link.get('href')
                 rel = link.get('rel')
                 if href and (not rel or "nofollow" not in rel):
-                    full_link = urljoin(resp.raw_response.url, href).split('#')[0]  # removes the fragment only    
+                    full_link = urljoin(resp.raw_response.url, href).split('#')[0]  # removes the fragment only
                     new_urls.append(full_link)
-                    
 
         if ai and is_html_file and not calendar_check:  # allowed indexing of the page
-            page_text = ' '.join([element.get_text(strip=True) for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p'])])
-
-            if len(page_text) > 700:  # low information page so not worth 
+			for tag in soup(['script', 'style', 'noscript']):
+				tag.decompose()
+            page_text = soup.get_text()
+            if len(page_text) > 700:  # low information page so not worth
                 total_count = cwf(page_text)  # returns total word count of that file
                 with shelve.open('longest_page.shelve', writeback=True) as lp:
                     max_count = max(lp.values(), default=0)
@@ -129,21 +129,19 @@ def is_valid(url):
                 return True
         return False
 
-    #valid_domains = {'ics.uci.edu', 'cs.uci.edu', 'informatics.uci.edu', 'stat.uci.edu'}
-	valid_domains = {'ics.uci.edu/~pattis'}
+    valid_domains = {'ics.uci.edu', 'cs.uci.edu', 'informatics.uci.edu', 'stat.uci.edu'}
 
     try:
         parsed = urlparse(url)
-        '''domain = parsed.netloc
+        domain = parsed.netloc
 
-        if domain == 'today.uci.edu' and not parsed.path.startswith('/department/information_computer_sciences'):
-            return False
+        if domain == 'today.uci.edu' and parsed.path.startswith('/department/information_computer_sciences'):
+            return True
 
         # Check if domain is valid
         if not any((valid_domain == domain) or (domain.endswith(f".{valid_domain}")) for valid_domain in valid_domains):
-            return False  # Exclude invalid domains like physics.uci.edu'''
-		if not ('ics.uci.edu/~pattis' in url):
-			return False
+            return False  # Exclude invalid domains like physics.uci.edu
+       
 
         # Check if scheme is valid
         if parsed.scheme not in {"http", "https"}:
@@ -165,10 +163,12 @@ def is_valid(url):
             and not validate_query_params(parse_qs(parsed.query.lower()))
             and not re.search(r"\bfilter\b", parsed.query.lower())  # just for filters
             and not (bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query) or re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.path)) and 'events' in parsed.path)  # another calendar check
-            and not bool(re.search(r"^.*?(/.+?/).*?\1.*$|^.*?/(.+?/)\2.*$", parsed.path.lower()))
-        )
-    
+            and not bool(re.search(r"^.*?(/.+?/).*?\1.*$|^.*?/(.+?/).*\2.*$", parsed.path.lower())))
+
     except TypeError:
         print("TypeError for", parsed)
         raise
+
+
+
 
