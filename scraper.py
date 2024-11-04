@@ -45,8 +45,8 @@ def cwf(text):
         with shelve.open('f.shelve', writeback=True) as fq:
             for word in tokenize(text):
                 count += 1
-                if word not in stop_words:
-                    if word in fq:
+                if word not in stop_words and len(word) > 3: #ensures the word is 4 or more characters because why would we want smaller characters
+					if word in fq:
                         fq[word] += 1
                     else:
                         fq[word] = 1
@@ -71,13 +71,20 @@ def check_calendar(raw_text, parsed):
 
 def extract_next_links(url, resp):
     new_urls = []
-    valid_codes = [200]  # was only 200 and 404 but loosened up restriction to allow for more urls
 
-    if resp.status in valid_codes:  # others are usually forbidden
-        soup = BeautifulSoup(resp.raw_response.content, 'lxml')  # changed from html.parser for speed
+    soup = BeautifulSoup(resp.raw_response.content, 'lxml')
+    # checks the meta tag to check if scraping is allowed
+    is_html_file = bool(soup.find("html") and soup.find("head") and soup.find("body"))  # check we are dealing with a true html file
 
-        # checks the meta tag to check if scraping is allowed
-        is_html_file = bool(soup.find("html") and soup.find("head") and soup.find("body"))  # check we are dealing with a true html file
+    if is_html_file and resp.status == 200:  # others are usually forbidden
+        # only adds the valid domains that we decided to parse through
+        with shelve.open('domains.shelve', writeback=True) as ds:
+            key = urlparse(url).netloc
+            if key in ds:
+                ds[key].append(url)
+            else:
+                ds[key] = [url]
+
         alf = True  # alf stands for allowed link following (custom name)
         ai = True  # ai stands for allowed indexing
         robot_meta_tag = soup.find('meta', attrs={'name': 'robots'})
@@ -87,16 +94,7 @@ def extract_next_links(url, resp):
 
         calendar_check = check_calendar(soup.get_text(separator=' ', strip=True), urlparse(url))  # check if we are dealing with an empty calendar
 
-		if is_html_file:
-			#only adds the valid domains that we decided to parse through 
-		    with shelve.open('domains.shelve', writeback=True) as ds:
-        		key = urlparse(url).netloc
-        		if key in ds:
-            		ds[key].append(url)
-        		else:
-           			ds[key] = [url]		
-
-        if alf and is_html_file and not calendar_check:  # allowed link following
+        if alf and not calendar_check:  # allowed link following
             # extract the links
             for link in soup.find_all('a'):
                 href = link.get('href')
@@ -105,11 +103,11 @@ def extract_next_links(url, resp):
                     full_link = urljoin(resp.raw_response.url, href).split('#')[0]  # removes the fragment only
                     new_urls.append(full_link)
 
-        if ai and is_html_file and not calendar_check:  # allowed indexing of the page
+        if ai and not calendar_check:  # allowed indexing of the page
             for tag in soup(['script', 'style', 'noscript']):
                 tag.decompose()
             page_text = soup.get_text()
-            if len(page_text) > 700:  # low information page so not worth
+            if len(page_text) > 350:  # low information page so not worth
                 total_count = cwf(page_text)  # returns total word count of that file
                 with shelve.open('longest_page.shelve', writeback=True) as lp:
                     max_count = max(lp.values(), default=0)
