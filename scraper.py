@@ -32,6 +32,7 @@ def density_calculation(text):
             stop_word_count += 1
     return stop_word_count / (stop_word_count + normal_count)
 
+
 # cwf = compute word frequencies
 def cwf(text):
     global stop_words
@@ -45,8 +46,9 @@ def cwf(text):
         with shelve.open('f.shelve', writeback=True) as fq:
             for word in tokenize(text):
                 count += 1
-                if word not in stop_words and len(word) > 3: #ensures the word is 4 or more characters because why would we want smaller characters
-					if word in fq:
+                # ensures the word is 4 or more characters because why would we want smaller characters
+                if word not in stop_words and len(word) > 3:
+                    if word in fq:
                         fq[word] += 1
                     else:
                         fq[word] = 1
@@ -72,12 +74,14 @@ def check_calendar(raw_text, parsed):
 def extract_next_links(url, resp):
     new_urls = []
 
-    soup = BeautifulSoup(resp.raw_response.content, 'lxml')
-    # checks the meta tag to check if scraping is allowed
-    is_html_file = bool(soup.find("html") and soup.find("head") and soup.find("body"))  # check we are dealing with a true html file
-
-    if is_html_file and resp.status == 200:  # others are usually forbidden
-        # only adds the valid domains that we decided to parse through
+ 
+    if resp.status == 200:  # others are usually forbidden
+        
+		# only adds the valid domains that we decided to parse through
+	    soup = BeautifulSoup(resp.raw_response.content, 'lxml')
+    	# checks the meta tag to check if scraping is allowed
+    	is_html_file = bool(soup.find("html") and soup.find("head") and soup.find("body"))  # check we are dealing with a true html file
+	
         with shelve.open('domains.shelve', writeback=True) as ds:
             key = urlparse(url).netloc
             if key in ds:
@@ -120,13 +124,15 @@ def extract_next_links(url, resp):
     return new_urls
 
 
+
 def is_valid(url):
     def validate_query_params(query_param):
         keys = ['sort', 'ref', 'share', 'scroll', 'position', 'idx', 'C', 'O', 'upname']
         if (query_param.get('action') and 'login' in query_param['action'][0].strip()) or (query_param.get('do') and 'backlink' in query_param['do'][0].strip()):
             return True
         for key in keys:
-            if key in query_param and query_param[key][0].strip():  # make sure the params don’t lead to empty values hence the strip
+            # make sure the params don’t lead to empty values hence the strip
+            if key in query_param and query_param[key][0].strip():
                 return True
         return False
 
@@ -135,14 +141,13 @@ def is_valid(url):
     try:
         parsed = urlparse(url)
         domain = parsed.netloc
-		special_link = False
+        special_link = False
         if domain == 'today.uci.edu' and parsed.path.startswith('/department/information_computer_sciences'):
-        	special_link = True
+            special_link = True
 
         # Check if domain is valid
         if not special_link and not any((valid_domain == domain) or (domain.endswith(f".{valid_domain}")) for valid_domain in valid_domains):
             return False  # Exclude invalid domains like physics.uci.edu
-       
 
         # Check if scheme is valid
         if parsed.scheme not in {"http", "https"}:
@@ -164,12 +169,11 @@ def is_valid(url):
             and not validate_query_params(parse_qs(parsed.query.lower()))
             and not re.search(r"\bfilter\b", parsed.query.lower())  # just for filters
             and not (bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.query) or re.search(r"\b\d{4}-\d{2}-\d{2}\b", parsed.path)) and 'events' in parsed.path)  # another calendar check
-            and not bool(re.search(r"^.*?(/.+?/).*?\1.*$|^.*?/(.+?/).*\2.*$", parsed.path.lower())))
+            and not bool(re.search(r"^.*?(/.+?/).*?\1.*$|^.*?/(.+?/).*\2.*$", parsed.path.lower()))
+        )
 
     except TypeError:
         print("TypeError for", parsed)
         raise
-
-
 
 
