@@ -102,7 +102,7 @@ def extract_next_links(url, resp):
                 href = link.get('href')
                 rel = link.get('rel')
                 if href and (not rel or "nofollow" not in rel):
-                    full_link = urlunparse(urlparse(urljoin(url, href))._replace(fragment=''))  # removes the fragment only    
+                    full_link = urljoin(resp.raw_response.url, href).split('#')[0]  # removes the fragment only    
                     new_urls.append(full_link)
                     
 
