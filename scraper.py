@@ -68,17 +68,10 @@ def check_calendar(raw_text, parsed):
           or bool(re.search(r"eventdisplay", parsed.query.lower()))))
     )
 
+
 def extract_next_links(url, resp):
     new_urls = []
     valid_codes = [200]  # was only 200 and 404 but loosened up restriction to allow for more urls
-
-    # this creates and adds sites to its specific domain name to answer questions about count and total unique sites (1 and 4)
-    with shelve.open('domains.shelve', writeback=True) as ds:
-        key = urlparse(url).netloc
-        if key in ds:
-            ds[key].append(url)
-        else:
-            ds[key] = [url]
 
     if resp.status in valid_codes:  # others are usually forbidden
         soup = BeautifulSoup(resp.raw_response.content, 'lxml')  # changed from html.parser for speed
@@ -94,6 +87,15 @@ def extract_next_links(url, resp):
 
         calendar_check = check_calendar(soup.get_text(separator=' ', strip=True), urlparse(url))  # check if we are dealing with an empty calendar
 
+		if is_html_file:
+			#only adds the valid domains that we decided to parse through 
+		    with shelve.open('domains.shelve', writeback=True) as ds:
+        		key = urlparse(url).netloc
+        		if key in ds:
+            		ds[key].append(url)
+        		else:
+           			ds[key] = [url]		
+
         if alf and is_html_file and not calendar_check:  # allowed link following
             # extract the links
             for link in soup.find_all('a'):
@@ -104,8 +106,8 @@ def extract_next_links(url, resp):
                     new_urls.append(full_link)
 
         if ai and is_html_file and not calendar_check:  # allowed indexing of the page
-			for tag in soup(['script', 'style', 'noscript']):
-				tag.decompose()
+            for tag in soup(['script', 'style', 'noscript']):
+                tag.decompose()
             page_text = soup.get_text()
             if len(page_text) > 700:  # low information page so not worth
                 total_count = cwf(page_text)  # returns total word count of that file
@@ -119,10 +121,11 @@ def extract_next_links(url, resp):
 
     return new_urls
 
+
 def is_valid(url):
     def validate_query_params(query_param):
-        keys = ['sort', 'ref', 'share', 'scroll', 'position']
-        if query_param.get('action') and 'login' in query_param['action'][0].strip():
+        keys = ['sort', 'ref', 'share', 'scroll', 'position', 'idx', 'C', 'O', 'upname']
+        if (query_param.get('action') and 'login' in query_param['action'][0].strip()) or (query_param.get('do') and 'backlink' in query_param['do'][0].strip()):
             return True
         for key in keys:
             if key in query_param and query_param[key][0].strip():  # make sure the params don’t lead to empty values hence the strip
@@ -134,12 +137,12 @@ def is_valid(url):
     try:
         parsed = urlparse(url)
         domain = parsed.netloc
-
+		special_link = False
         if domain == 'today.uci.edu' and parsed.path.startswith('/department/information_computer_sciences'):
-            return True
+        	special_link = True
 
         # Check if domain is valid
-        if not any((valid_domain == domain) or (domain.endswith(f".{valid_domain}")) for valid_domain in valid_domains):
+        if not special_link and not any((valid_domain == domain) or (domain.endswith(f".{valid_domain}")) for valid_domain in valid_domains):
             return False  # Exclude invalid domains like physics.uci.edu
        
 
@@ -150,11 +153,11 @@ def is_valid(url):
         # Validate file types, paths, and query parameters
         return (
             not re.match(
-                r".*\.(css|js|bmp|gif|jpeg|ico|jpg|cpp|h"
-                r"|png|tiff|mid|mp2|mp3|mp4"
+                r".*\.(css|js|bmp|gif|jpeg|ico|jpg|cpp|h|wvx"
+                r"|png|tiff|mid|mp2|mp3|mp4|apk"
                 r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf|lif"
                 r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
-                r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso|war|bst|mpg|tgz"
+                r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso|war|bst|mpg|tgz|cc"
                 r"|epub|dll|cnf|tgz|sha1|bib"
                 r"|thmx|mso|arff|rtf|jar|csv|Z|ppsh|ppsx|img|sql|class"
                 r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower()
