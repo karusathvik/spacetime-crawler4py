@@ -71,55 +71,55 @@ def check_calendar(raw_text, parsed):
     )
 
 
+
 def extract_next_links(url, resp):
     new_urls = []
 
- 
     if resp.status == 200:  # others are usually forbidden
+        # only adds the valid domains that we decided to parse through
+        soup = BeautifulSoup(resp.raw_response.content, 'lxml')
+        # checks the meta tag to check if scraping is allowed
+        is_html_file = bool(soup.find("html") and soup.find("head") and soup.find("body"))  # check we are dealing with a true html file
         
-		# only adds the valid domains that we decided to parse through
-	    soup = BeautifulSoup(resp.raw_response.content, 'lxml')
-    	# checks the meta tag to check if scraping is allowed
-    	is_html_file = bool(soup.find("html") and soup.find("head") and soup.find("body"))  # check we are dealing with a true html file
-	
-        with shelve.open('domains.shelve', writeback=True) as ds:
-            key = urlparse(url).netloc
-            if key in ds:
-                ds[key].append(url)
-            else:
-                ds[key] = [url]
+        if is_html_file:
+            with shelve.open('domains.shelve', writeback=True) as ds:
+                key = urlparse(url).netloc
+                if key in ds:
+                    ds[key].append(url)
+                else:
+                    ds[key] = [url]
 
-        alf = True  # alf stands for allowed link following (custom name)
-        ai = True  # ai stands for allowed indexing
-        robot_meta_tag = soup.find('meta', attrs={'name': 'robots'})
-        if robot_meta_tag and 'content' in robot_meta_tag:
-            alf = not ('nofollow' in robot_meta_tag['content'])  # False if non-follow
-            ai = not ('noindex' in robot_meta_tag['content'])  # False if non-indexable
+            alf = True  # alf stands for allowed link following (custom name)
+            ai = True  # ai stands for allowed indexing
+            robot_meta_tag = soup.find('meta', attrs={'name': 'robots'})
+            if robot_meta_tag and 'content' in robot_meta_tag:
+                alf = not ('nofollow' in robot_meta_tag['content'])  # False if non-follow
+                ai = not ('noindex' in robot_meta_tag['content'])  # False if non-indexable
 
-        calendar_check = check_calendar(soup.get_text(separator=' ', strip=True), urlparse(url))  # check if we are dealing with an empty calendar
+            calendar_check = check_calendar(soup.get_text(separator=' ', strip=True), urlparse(url))  # check if we are dealing with an empty calendar
 
-        if alf and not calendar_check:  # allowed link following
-            # extract the links
-            for link in soup.find_all('a'):
-                href = link.get('href')
-                rel = link.get('rel')
-                if href and (not rel or "nofollow" not in rel):
-                    full_link = urljoin(resp.raw_response.url, href).split('#')[0]  # removes the fragment only
-                    new_urls.append(full_link)
+            if alf and not calendar_check:  # allowed link following
+                # extract the links
+                for link in soup.find_all('a'):
+                    href = link.get('href')
+                    rel = link.get('rel')
+                    if href and (not rel or "nofollow" not in rel):
+                        full_link = urljoin(resp.raw_response.url, href).split('#')[0]  # removes the fragment only
+                        new_urls.append(full_link)
 
-        if ai and not calendar_check:  # allowed indexing of the page
-            for tag in soup(['script', 'style', 'noscript']):
-                tag.decompose()
-            page_text = soup.get_text()
-            if len(page_text) > 350:  # low information page so not worth
-                total_count = cwf(page_text)  # returns total word count of that file
-                with shelve.open('longest_page.shelve', writeback=True) as lp:
-                    max_count = max(lp.values(), default=0)
-                    if total_count > max_count:
-                        lp.clear()
-                        lp[url] = total_count
-                        with open("long_file.txt", "w") as file:
-                            file.write(page_text)
+            if ai and not calendar_check:  # allowed indexing of the page
+                for tag in soup(['script', 'style', 'noscript']):
+                    tag.decompose()
+                page_text = soup.get_text()
+                if len(page_text) > 350:  # low information page so not worth
+                    total_count = cwf(page_text)  # returns total word count of that file
+                    with shelve.open('longest_page.shelve', writeback=True) as lp:
+                        max_count = max(lp.values(), default=0)
+                        if total_count > max_count:
+                            lp.clear()
+                            lp[url] = total_count
+                            with open("long_file.txt", "w") as file:
+                                file.write(page_text)
 
     return new_urls
 
@@ -127,7 +127,7 @@ def extract_next_links(url, resp):
 
 def is_valid(url):
     def validate_query_params(query_param):
-        keys = ['sort', 'ref', 'share', 'scroll', 'position', 'idx', 'C', 'O', 'upname']
+        keys = ['sort', 'ref', 'share', 'scroll', 'position', 'idx', 'c', 'o', 'upname']
         if (query_param.get('action') and 'login' in query_param['action'][0].strip()) or (query_param.get('do') and 'backlink' in query_param['do'][0].strip()):
             return True
         for key in keys:
@@ -156,13 +156,13 @@ def is_valid(url):
         # Validate file types, paths, and query parameters
         return (
             not re.match(
-                r".*\.(css|js|bmp|gif|jpeg|ico|jpg|cpp|h|wvx"
+                r".*\.(css|js|bmp|gif|jpeg|ico|jpg|cpp|h|wvx|htm|py"
                 r"|png|tiff|mid|mp2|mp3|mp4|apk"
                 r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf|lif"
                 r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
                 r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso|war|bst|mpg|tgz|cc"
                 r"|epub|dll|cnf|tgz|sha1|bib"
-                r"|thmx|mso|arff|rtf|jar|csv|Z|ppsh|ppsx|img|sql|class"
+                r"|thmx|mso|arff|rtf|jar|csv|Z|ppsh|ppsx|img|sql|class|ova|db"
                 r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower()
             )
             and not re.match(r".*\b(auth|signup|admin|checkout|login|calendar|pix)\b.*", parsed.path.lower())  # sensitive information as well as calendar
